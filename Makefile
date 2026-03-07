@@ -7,6 +7,7 @@ PLIST_DST = $(HOME)/Library/LaunchAgents/$(PLIST_LABEL).plist
 VERSION_FILE = VERSION
 BUMP ?= patch
 CODESIGN_ID ?= Developer ID Application: Andrey Kim (73R36N2A46)
+INSTALLER_ID ?= Developer ID Installer: Andrey Kim (73R36N2A46)
 CODESIGN_REQ ?= designated => anchor apple generic and certificate leaf[subject.OU] = "73R36N2A46"
 NOTARIZE_PROFILE ?= Notarize
 
@@ -43,17 +44,15 @@ release:
 	@$(MAKE) _bump
 	@$(MAKE) build
 	@$(MAKE) _sign
+	@$(MAKE) _pkg
 	@$(MAKE) _notarize
 	@VERSION=$$(cat $(VERSION_FILE)); \
 	TITLE="$${TITLE:-v$$VERSION}"; \
 	git add $(VERSION_FILE) Sources/main.swift && \
 	git commit -m "chore: bump version to $$VERSION" && \
 	git tag "v$$VERSION" && \
-	mkdir -p dist && \
-	cp $(BUILD_DIR)/$(APP_NAME) dist/ && \
-	cd dist && zip -r $(APP_NAME)-$$VERSION.zip $(APP_NAME) && cd .. && \
 	git push origin main --tags && \
-	gh release create "v$$VERSION" "dist/$(APP_NAME)-$$VERSION.zip" \
+	gh release create "v$$VERSION" "dist/$(APP_NAME)-$$VERSION.pkg" \
 		--title "$$TITLE" --notes-file RELEASE_NOTES.md && \
 	rm -f RELEASE_NOTES.md && \
 	echo "Released v$$VERSION"
@@ -66,15 +65,27 @@ _sign:
 		$(BUILD_DIR)/$(APP_NAME)
 	@echo "Signed"
 
+_pkg:
+	@echo "Building PKG installer..."
+	@VERSION=$$(cat $(VERSION_FILE)); \
+	mkdir -p dist/pkg-root/Library/Application\ Support/LidGuard; \
+	cp $(BUILD_DIR)/$(APP_NAME) dist/pkg-root/Library/Application\ Support/LidGuard/; \
+	pkgbuild --root dist/pkg-root \
+		--identifier $(PLIST_LABEL) \
+		--version $$VERSION \
+		--install-location / \
+		--sign "$(INSTALLER_ID)" \
+		dist/$(APP_NAME)-$$VERSION.pkg; \
+	rm -rf dist/pkg-root; \
+	echo "Built: dist/$(APP_NAME)-$$VERSION.pkg"
+
 _notarize:
-	@echo "Notarizing $(APP_NAME)..."
-	@mkdir -p dist
-	@cp $(BUILD_DIR)/$(APP_NAME) dist/
-	@cd dist && zip -r $(APP_NAME)-notarize.zip $(APP_NAME) && cd ..
-	@xcrun notarytool submit dist/$(APP_NAME)-notarize.zip \
-		--keychain-profile "$(NOTARIZE_PROFILE)" --wait
-	@rm -f dist/$(APP_NAME)-notarize.zip dist/$(APP_NAME)
-	@echo "Notarization complete"
+	@echo "Notarizing PKG..."
+	@VERSION=$$(cat $(VERSION_FILE)); \
+	xcrun notarytool submit dist/$(APP_NAME)-$$VERSION.pkg \
+		--keychain-profile "$(NOTARIZE_PROFILE)" --wait && \
+	xcrun stapler staple dist/$(APP_NAME)-$$VERSION.pkg && \
+	echo "Notarization complete"
 
 _bump:
 	@VERSION=$$(cat $(VERSION_FILE)); \
