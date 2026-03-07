@@ -46,7 +46,7 @@ release:
 	@$(MAKE) _notarize
 	@VERSION=$$(cat $(VERSION_FILE)); \
 	TITLE="$${TITLE:-v$$VERSION}"; \
-	git add $(VERSION_FILE) && \
+	git add $(VERSION_FILE) Sources/main.swift && \
 	git commit -m "chore: bump version to $$VERSION" && \
 	git tag "v$$VERSION" && \
 	mkdir -p dist && \
@@ -86,8 +86,10 @@ _bump:
 		minor) MINOR=$$((MINOR + 1)); PATCH=0;; \
 		patch) PATCH=$$((PATCH + 1));; \
 	esac; \
-	echo "$$MAJOR.$$MINOR.$$PATCH" > $(VERSION_FILE); \
-	echo "Version bumped to $$MAJOR.$$MINOR.$$PATCH"
+	NEW="$$MAJOR.$$MINOR.$$PATCH"; \
+	echo "$$NEW" > $(VERSION_FILE); \
+	sed -i '' "s/let helperVersion = \".*\"/let helperVersion = \"$$NEW\"/" Sources/main.swift; \
+	echo "Version bumped to $$NEW"
 
 lint:
 	@TOOLCHAIN_DIR=$$(dirname "$$(dirname "$$(xcrun --find swiftc)")"); \
