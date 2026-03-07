@@ -1,0 +1,11 @@
+# Swift
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# IDE
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/

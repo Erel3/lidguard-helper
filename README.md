@@ -1,33 +1,98 @@
-# LidGuard Helper
+<p align="center">
+  <img src="Resources/AppIcon.png" width="128" height="128" alt="LidGuard icon">
+</p>
 
-A privileged helper daemon for [LidGuard](https://github.com/Erel3/lidguard), the macOS laptop theft protection app.
+<h1 align="center">LidGuard Helper</h1>
 
-Pure CLI binary managed by `launchd`. Handles features that require elevated privileges or private APIs:
+<p align="center">
+  <strong>Privileged helper daemon for <a href="https://github.com/Erel3/lidguard">LidGuard</a></strong>
+</p>
 
-1. **Clamshell sleep prevention** — `sudo pmset disablesleep`
-2. **Lock screen overlay** — SkyLight private API
-3. **Power button detection** — requires Accessibility
+<p align="center">
+  <a href="https://github.com/Erel3/lidguard-helper/releases/latest"><img src="https://img.shields.io/github/v/release/Erel3/lidguard-helper?style=flat-square&color=blue" alt="Release"></a>
+  <img src="https://img.shields.io/badge/platform-macOS_14%2B-black?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/swift-6.2-orange?style=flat-square" alt="Swift">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Erel3/lidguard-helper?style=flat-square" alt="License"></a>
+</p>
 
-## IPC
+<p align="center">
+  Silent background daemon managed by <code>launchd</code> with on-demand socket activation.<br>
+  Handles features that require elevated privileges or private APIs.
+</p>
 
-Communicates with the main app over localhost TCP (port 51423) using a JSON protocol with shared secret authentication.
+---
 
-## Installation
+## Features
 
-Distributed as a signed PKG installer. Installs to:
-- `~/Library/Application Support/LidGuard/lidguard-helper`
-- LaunchAgent plist for `launchd` management
+🛡️ **Clamshell Sleep Prevention** — `sudo pmset disablesleep` via sudoers\
+🔒 **Lock Screen Overlay** — fullscreen "STOLEN DEVICE" window via SkyLight private API\
+⚡ **Power Button Detection** — NSEvent system-defined events (requires Accessibility)
 
-## Requirements
+## How It Works
 
-- macOS 14.0+
-- Swift 5.9
+```
+LidGuard app ──TCP──▶ launchd ──socket activation──▶ lidguard-helper
+                       port 51423                      ├─ pmset
+                       JSON + shared secret auth       ├─ SkyLight overlay
+                                                       └─ power button monitor
 
-## Dependencies
+Idle 30s → daemon exits → launchd restarts on next connection
+```
 
-- [SkyLightWindow](https://github.com/nicklama/SkyLightWindow) (SPM) — private API wrapper for fullscreen overlay windows
-- Apple frameworks: IOKit, ApplicationServices, Security
+The daemon is **not always running**. `launchd` listens on port 51423 and starts the daemon only when the main app connects. Zero resource usage when LidGuard isn't active.
+
+## Install
+
+### Build from Source
+
+```bash
+git clone https://github.com/Erel3/lidguard-helper.git
+cd lidguard-helper
+make build          # Swift release build
+make install        # install binary + LaunchAgent, load via launchctl
+make uninstall      # unload and remove
+make lint           # run swiftlint
+```
+
+### Install Location
+
+| What | Where |
+|:-----|:------|
+| Binary | `~/Library/Application Support/LidGuard/lidguard-helper` |
+| LaunchAgent | `~/Library/LaunchAgents/com.lidguard.helper.plist` |
+| Shared secret | `~/Library/Application Support/LidGuard/.ipc-secret` |
+| Sudoers | `/etc/sudoers.d/lidguard` (set up by main app or PKG installer) |
+
+## IPC Protocol
+
+Newline-delimited JSON over localhost TCP port 51423.
+
+### Commands (App → Daemon)
+
+| Command | Description |
+|:--------|:------------|
+| `auth` | Authenticate with shared secret (must be first) |
+| `enable_pmset` / `disable_pmset` | Toggle clamshell sleep prevention |
+| `show_lock_screen` / `hide_lock_screen` | Toggle lock screen overlay |
+| `enable_power_button` / `disable_power_button` | Toggle power button monitoring |
+| `get_status` | Query current state of all features |
+
+### Events (Daemon → App)
+
+| Event | Description |
+|:------|:------------|
+| `auth_result` | Authentication success/failure |
+| `status` | Current state of pmset, lock screen, power button |
+| `power_button_pressed` | Power button was pressed |
+| `error` | Error message |
+
+## Permissions
+
+| Permission | Why |
+|:-----------|:----|
+| **Accessibility** | Power button detection via NSEvent |
+| **Sudoers** | `pmset disablesleep` requires root |
 
 ## License
 
-See [LICENSE](LICENSE).
+[MIT](LICENSE)
