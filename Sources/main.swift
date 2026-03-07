@@ -18,6 +18,8 @@ func getLaunchdSocket() -> Int32? {
   return socketFD
 }
 
+let helperVersion = "1.0.0"
+
 // MARK: - Setup
 
 let app = NSApplication.shared
@@ -32,7 +34,8 @@ let server = TCPServer(
   authManager: authManager,
   pmsetManager: pmsetManager,
   lockScreenManager: lockScreenManager,
-  powerButtonMonitor: powerButtonMonitor
+  powerButtonMonitor: powerButtonMonitor,
+  version: helperVersion
 )
 
 // Wire power button callback to broadcast
@@ -77,7 +80,7 @@ sigSource.setEventHandler {
 }
 sigSource.resume()
 
-print("[Helper] Started (pid=\(getpid()))")
+print("[Helper] Started v\(helperVersion) (pid=\(getpid()))")
 
 // MARK: - Run Loop
 

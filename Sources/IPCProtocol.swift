@@ -15,13 +15,14 @@ struct IPCCommand: Codable {
 struct IPCMessage: Codable {
   let type: String
   var success: Bool?
+  var version: String?
   var pmset: Bool?
   var lockScreen: Bool?
   var powerButton: Bool?
   var message: String?
 
-  static func authResult(_ success: Bool) -> IPCMessage {
-    IPCMessage(type: "auth_result", success: success)
+  static func authResult(_ success: Bool, version: String? = nil) -> IPCMessage {
+    IPCMessage(type: "auth_result", success: success, version: version)
   }
 
   static func status(pmset: Bool, lockScreen: Bool, powerButton: Bool) -> IPCMessage {

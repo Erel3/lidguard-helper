@@ -10,6 +10,7 @@ final class TCPServer {
   private let pmsetManager: PmsetManager
   private let lockScreenManager: LockScreenManager
   private let powerButtonMonitor: PowerButtonMonitor
+  private let version: String
 
   var activeConnections: Int { connections.count }
 
@@ -17,12 +18,14 @@ final class TCPServer {
     authManager: AuthManager,
     pmsetManager: PmsetManager,
     lockScreenManager: LockScreenManager,
-    powerButtonMonitor: PowerButtonMonitor
+    powerButtonMonitor: PowerButtonMonitor,
+    version: String
   ) {
     self.authManager = authManager
     self.pmsetManager = pmsetManager
     self.lockScreenManager = lockScreenManager
     self.powerButtonMonitor = powerButtonMonitor
+    self.version = version
   }
 
   func start(existingFD: Int32?) {
@@ -182,7 +185,7 @@ final class TCPServer {
     case "auth":
       let success = authManager.verify(cmd.secret ?? "")
       connections[fileDescriptor]?.authenticated = success
-      send(.authResult(success), to: fileDescriptor)
+      send(.authResult(success, version: success ? version : nil), to: fileDescriptor)
     case "enable_pmset":
       pmsetManager.enable()
       sendStatus(to: fileDescriptor)
