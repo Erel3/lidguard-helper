@@ -1,3 +1,4 @@
+import ApplicationServices
 import Darwin
 import Foundation
 
@@ -231,7 +232,8 @@ final class TCPServer {
     let status = IPCMessage.status(
       pmset: pmsetManager.isEnabled,
       lockScreen: lockScreenManager.isShowing,
-      powerButton: powerButtonMonitor.isMonitoring
+      powerButton: powerButtonMonitor.isMonitoring,
+      accessibilityGranted: AXIsProcessTrusted()
     )
     send(status, to: fileDescriptor)
   }

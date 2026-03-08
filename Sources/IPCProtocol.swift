@@ -18,14 +18,20 @@ struct IPCMessage: Codable {
   var pmset: Bool?
   var lockScreen: Bool?
   var powerButton: Bool?
+  var accessibilityGranted: Bool?
   var message: String?
 
   static func authResult(_ success: Bool, version: String? = nil) -> IPCMessage {
     IPCMessage(type: "auth_result", success: success, version: version)
   }
 
-  static func status(pmset: Bool, lockScreen: Bool, powerButton: Bool) -> IPCMessage {
-    IPCMessage(type: "status", pmset: pmset, lockScreen: lockScreen, powerButton: powerButton)
+  static func status(
+    pmset: Bool, lockScreen: Bool, powerButton: Bool, accessibilityGranted: Bool
+  ) -> IPCMessage {
+    IPCMessage(
+      type: "status", pmset: pmset, lockScreen: lockScreen,
+      powerButton: powerButton, accessibilityGranted: accessibilityGranted
+    )
   }
 
   static func powerButtonPressed() -> IPCMessage {
