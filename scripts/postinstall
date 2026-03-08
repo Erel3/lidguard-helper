@@ -1,20 +1,33 @@
 #!/bin/bash
 # Post-install script for lidguard-helper PKG
 # Runs as root during PKG installation
+# $1 = package path, $2 = install target location
 
-INSTALL_DIR="$HOME/Library/Application Support/LidGuard"
-PLIST_SRC="$HOME/Library/LaunchAgents/com.lidguard.helper.plist"
-USERNAME=$(logname 2>/dev/null || echo "$USER")
+# Get the real console user (not root)
+USERNAME=$(/usr/bin/stat -f '%Su' /dev/console)
+USER_HOME=$(dscl . -read /Users/"$USERNAME" NFSHomeDirectory | awk '{print $2}')
 UID_NUM=$(id -u "$USERNAME")
 
-# Fix plist binary path (template uses INSTALL_PATH placeholder)
-if [ -f "$PLIST_SRC" ]; then
-  sed -i '' "s|INSTALL_PATH|$INSTALL_DIR|g" "$PLIST_SRC"
-fi
+PAYLOAD="$2"
+INSTALL_DIR="$USER_HOME/Library/Application Support/LidGuard"
+PLIST_DST="$USER_HOME/Library/LaunchAgents/com.lidguard.helper.plist"
+
+echo "postinstall: PAYLOAD=$PAYLOAD USER=$USERNAME HOME=$USER_HOME"
+
+# Install binary
+mkdir -p "$INSTALL_DIR"
+cp "$PAYLOAD/lidguard-helper" "$INSTALL_DIR/"
+chown "$USERNAME" "$INSTALL_DIR/lidguard-helper"
+chmod 755 "$INSTALL_DIR/lidguard-helper"
+
+# Install and resolve LaunchAgent plist
+mkdir -p "$USER_HOME/Library/LaunchAgents"
+sed "s|INSTALL_PATH|$INSTALL_DIR|g" "$PAYLOAD/com.lidguard.helper.plist" > "$PLIST_DST"
+chown "$USERNAME" "$PLIST_DST"
 
 # Load LaunchAgent
-sudo -u "$USERNAME" launchctl bootout "gui/$UID_NUM" "$PLIST_SRC" 2>/dev/null
-sudo -u "$USERNAME" launchctl bootstrap "gui/$UID_NUM" "$PLIST_SRC"
+sudo -u "$USERNAME" launchctl bootout "gui/$UID_NUM" "$PLIST_DST" 2>/dev/null
+sudo -u "$USERNAME" launchctl bootstrap "gui/$UID_NUM" "$PLIST_DST"
 
 # Install sudoers for passwordless pmset
 cat > /etc/sudoers.d/lidguard <<SUDOERS
@@ -22,3 +35,5 @@ $USERNAME ALL = NOPASSWD: /usr/bin/pmset -a disablesleep 1
 $USERNAME ALL = NOPASSWD: /usr/bin/pmset -a disablesleep 0
 SUDOERS
 chmod 440 /etc/sudoers.d/lidguard
+
+echo "postinstall: done"
