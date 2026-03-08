@@ -69,11 +69,14 @@ _pkg:
 	@echo "Building PKG installer..."
 	@VERSION=$$(cat $(VERSION_FILE)); \
 	mkdir -p dist/pkg-root/Library/Application\ Support/LidGuard; \
+	mkdir -p dist/pkg-root/Library/LaunchAgents; \
 	cp $(BUILD_DIR)/$(APP_NAME) dist/pkg-root/Library/Application\ Support/LidGuard/; \
+	cp $(PLIST_SRC) dist/pkg-root/Library/LaunchAgents/; \
 	pkgbuild --root dist/pkg-root \
 		--identifier $(PLIST_LABEL) \
 		--version $$VERSION \
 		--install-location / \
+		--scripts scripts \
 		--sign "$(INSTALLER_ID)" \
 		dist/$(APP_NAME)-$$VERSION.pkg; \
 	rm -rf dist/pkg-root; \

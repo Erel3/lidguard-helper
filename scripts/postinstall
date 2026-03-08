@@ -1,0 +1,24 @@
+#!/bin/bash
+# Post-install script for lidguard-helper PKG
+# Runs as root during PKG installation
+
+INSTALL_DIR="$HOME/Library/Application Support/LidGuard"
+PLIST_SRC="$HOME/Library/LaunchAgents/com.lidguard.helper.plist"
+USERNAME=$(logname 2>/dev/null || echo "$USER")
+UID_NUM=$(id -u "$USERNAME")
+
+# Fix plist binary path (template uses INSTALL_PATH placeholder)
+if [ -f "$PLIST_SRC" ]; then
+  sed -i '' "s|INSTALL_PATH|$INSTALL_DIR|g" "$PLIST_SRC"
+fi
+
+# Load LaunchAgent
+sudo -u "$USERNAME" launchctl bootout "gui/$UID_NUM" "$PLIST_SRC" 2>/dev/null
+sudo -u "$USERNAME" launchctl bootstrap "gui/$UID_NUM" "$PLIST_SRC"
+
+# Install sudoers for passwordless pmset
+cat > /etc/sudoers.d/lidguard <<SUDOERS
+$USERNAME ALL = NOPASSWD: /usr/bin/pmset -a disablesleep 1
+$USERNAME ALL = NOPASSWD: /usr/bin/pmset -a disablesleep 0
+SUDOERS
+chmod 440 /etc/sudoers.d/lidguard

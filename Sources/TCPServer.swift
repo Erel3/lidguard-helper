@@ -183,7 +183,7 @@ final class TCPServer {
 
     switch cmd.type {
     case "auth":
-      let success = authManager.verify(cmd.secret ?? "")
+      let success = authManager.verifyPeer(fileDescriptor: fileDescriptor)
       connections[fileDescriptor]?.authenticated = success
       send(.authResult(success, version: success ? version : nil), to: fileDescriptor)
     case "enable_pmset":
