@@ -19,27 +19,44 @@ final class AuthManager {
       return false
     }
 
-    let reqString = """
+    // Accept Developer ID, TestFlight, or Mac App Store signed builds
+    // All require our bundle identifier — no other app can connect
+    let requirements = [
+      // Developer ID (direct distribution)
+      """
       anchor apple generic \
       and certificate leaf[subject.OU] = "\(teamID)" \
       and identifier "\(appIdentifier)"
+      """,
+      // TestFlight (OID 1.2.840.113635.100.6.1.25.1)
       """
-    var requirement: SecRequirement?
-    guard SecRequirementCreateWithString(
-      reqString as CFString, [], &requirement
-    ) == errSecSuccess, let req = requirement else {
-      print("[AuthManager] Failed to create requirement")
-      return false
+      anchor apple generic \
+      and certificate leaf[field.1.2.840.113635.100.6.1.25.1] \
+      and identifier "\(appIdentifier)"
+      """,
+      // Mac App Store (OID 1.2.840.113635.100.6.1.13)
+      """
+      anchor apple generic \
+      and certificate leaf[field.1.2.840.113635.100.6.1.13] \
+      and identifier "\(appIdentifier)"
+      """
+    ]
+
+    for reqString in requirements {
+      var requirement: SecRequirement?
+      guard SecRequirementCreateWithString(
+        reqString as CFString, [], &requirement
+      ) == errSecSuccess, let req = requirement else {
+        continue
+      }
+      if SecCodeCheckValidity(guestCode, [], req) == errSecSuccess {
+        print("[AuthManager] Peer PID \(pid) verified")
+        return true
+      }
     }
 
-    let valid = SecCodeCheckValidity(guestCode, [], req)
-      == errSecSuccess
-    if valid {
-      print("[AuthManager] Peer PID \(pid) verified (team \(teamID))")
-    } else {
-      print("[AuthManager] Peer PID \(pid) rejected")
-    }
-    return valid
+    print("[AuthManager] Peer PID \(pid) rejected")
+    return false
   }
 
   // MARK: - TCP Peer PID via libproc
