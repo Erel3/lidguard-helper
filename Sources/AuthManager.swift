@@ -1,7 +1,7 @@
 import Foundation
 import Security
 
-final class AuthManager {
+final class AuthManager: Sendable {
   private let teamID = "73R36N2A46"
   private let appIdentifier = "com.akim.lidguard"
 

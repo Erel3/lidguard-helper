@@ -2,11 +2,12 @@ import AppKit
 import SwiftUI
 import SkyLightWindow
 
+@MainActor
 final class LockScreenManager {
   private var window: NSWindow?
   private var hasDelegated = false
   private var viewModel = LockScreenViewModel()
-  private(set) var isShowing = false
+  nonisolated(unsafe) private(set) var isShowing = false
 
   private static let windowSize = NSSize(width: 400, height: 200)
 
@@ -73,6 +74,7 @@ final class LockScreenManager {
 
 // MARK: - ViewModel
 
+@MainActor
 class LockScreenViewModel: ObservableObject {
   @Published var message: String = "STOLEN DEVICE"
   @Published var contactInfo: String = ""

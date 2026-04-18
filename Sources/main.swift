@@ -40,9 +40,11 @@ if CommandLine.arguments.contains("--sensor-only") {
   signal(SIGINT, SIG_IGN)
   let sigInt = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
   sigInt.setEventHandler {
-    print("[Helper] SIGINT, stopping sensor")
-    motionMonitor.stop()
-    exit(0)
+    MainActor.assumeIsolated {
+      print("[Helper] SIGINT, stopping sensor")
+      motionMonitor.stop()
+      exit(0)
+    }
   }
   sigInt.resume()
   app.run()
@@ -78,8 +80,10 @@ motionMonitor.onMotionDetected = { [weak server] detail, session in
 let wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
   forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
 ) { [weak motionMonitor] _ in
-  print("[Helper] System did wake")
-  motionMonitor?.handleSystemDidWake()
+  MainActor.assumeIsolated {
+    print("[Helper] System did wake")
+    motionMonitor?.handleSystemDidWake()
+  }
 }
 _ = wakeObserver
 
@@ -88,22 +92,24 @@ server.start(existingFD: launchdFD)
 
 // MARK: - Idle Timeout
 
-var idleSeconds: Int = 0
+nonisolated(unsafe) var idleSeconds: Int = 0
 let idleTimer = DispatchSource.makeTimerSource(queue: .main)
 idleTimer.schedule(deadline: .now() + 5, repeating: 5)
 idleTimer.setEventHandler {
-  if server.activeConnections == 0 {
-    idleSeconds += 5
-    if idleSeconds >= 30 {
-      print("[Helper] Idle timeout (30s), exiting")
-      pmsetManager.disable()
-      lockScreenManager.hide()
-      powerButtonMonitor.stop()
-      motionMonitor.stop()
-      exit(0)
+  MainActor.assumeIsolated {
+    if server.activeConnections == 0 {
+      idleSeconds += 5
+      if idleSeconds >= 30 {
+        print("[Helper] Idle timeout (30s), exiting")
+        pmsetManager.disable()
+        lockScreenManager.hide()
+        powerButtonMonitor.stop()
+        motionMonitor.stop()
+        exit(0)
+      }
+    } else {
+      idleSeconds = 0
     }
-  } else {
-    idleSeconds = 0
   }
 }
 idleTimer.resume()
@@ -113,12 +119,14 @@ idleTimer.resume()
 signal(SIGTERM, SIG_IGN)
 let sigSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 sigSource.setEventHandler {
-  print("[Helper] SIGTERM received, cleaning up")
-  pmsetManager.disable()
-  lockScreenManager.hide()
-  powerButtonMonitor.stop()
-  motionMonitor.stop()
-  exit(0)
+  MainActor.assumeIsolated {
+    print("[Helper] SIGTERM received, cleaning up")
+    pmsetManager.disable()
+    lockScreenManager.hide()
+    powerButtonMonitor.stop()
+    motionMonitor.stop()
+    exit(0)
+  }
 }
 sigSource.resume()
 

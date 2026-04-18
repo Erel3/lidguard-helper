@@ -1,13 +1,20 @@
 import Foundation
 
-final class PmsetManager {
+final class PmsetManager: @unchecked Sendable {
   private let queue = DispatchQueue(label: "com.lidguard.helper.pmset")
-  private(set) var isEnabled = false
+  private let lock = NSLock()
+  private var _isEnabled = false
+  var isEnabled: Bool {
+    lock.lock(); defer { lock.unlock() }
+    return _isEnabled
+  }
 
   func enable() {
     queue.async { [self] in
       let success = runProcess("/usr/bin/sudo", arguments: ["pmset", "-a", "disablesleep", "1"])
-      if success { isEnabled = true }
+      if success {
+        lock.lock(); _isEnabled = true; lock.unlock()
+      }
       print("[PmsetManager] Enable disablesleep: \(success ? "OK" : "FAILED")")
     }
   }
@@ -15,7 +22,9 @@ final class PmsetManager {
   func disable() {
     queue.async { [self] in
       let success = runProcess("/usr/bin/sudo", arguments: ["pmset", "-a", "disablesleep", "0"])
-      if success { isEnabled = false }
+      if success {
+        lock.lock(); _isEnabled = false; lock.unlock()
+      }
       print("[PmsetManager] Disable disablesleep: \(success ? "OK" : "FAILED")")
     }
   }

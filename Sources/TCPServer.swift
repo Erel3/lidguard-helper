@@ -2,9 +2,10 @@ import ApplicationServices
 import Darwin
 import Foundation
 
-final class TCPServer {
-  private var listenSource: DispatchSourceRead?
-  private var connections: [Int32: ClientConnection] = [:]
+final class TCPServer: @unchecked Sendable {
+  // All `nonisolated(unsafe)` fields below are only touched on `queue`.
+  nonisolated(unsafe) private var listenSource: DispatchSourceRead?
+  nonisolated(unsafe) private var connections: [Int32: ClientConnection] = [:]
   private let queue = DispatchQueue(label: "com.lidguard.helper.tcp")
 
   private let authManager: AuthManager
@@ -14,7 +15,9 @@ final class TCPServer {
   private let motionMonitor: MotionMonitor
   private let version: String
 
-  var activeConnections: Int { connections.count }
+  var activeConnections: Int {
+    queue.sync { connections.count }
+  }
 
   init(
     authManager: AuthManager,
@@ -204,6 +207,9 @@ final class TCPServer {
   }
 
   private func dispatchMainThreadCommand(_ cmd: IPCCommand, fileDescriptor: Int32) {
+    let lockScreenManager = self.lockScreenManager
+    let powerButtonMonitor = self.powerButtonMonitor
+    let motionMonitor = self.motionMonitor
     switch cmd.type {
     case "lock_screen":
       lockSystemScreen()
@@ -211,20 +217,17 @@ final class TCPServer {
       let name = cmd.contactName ?? ""
       let phone = cmd.contactPhone ?? ""
       let msg = cmd.message ?? "STOLEN DEVICE"
-      CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) { [self] in
-        lockScreenManager.show(contactName: name, contactPhone: phone, message: msg)
-      }
-      CFRunLoopWakeUp(CFRunLoopGetMain())
+      runOnMain { lockScreenManager.show(contactName: name, contactPhone: phone, message: msg) }
     case "hide_lock_screen":
-      runOnMain { [self] in lockScreenManager.hide() }
+      runOnMain { lockScreenManager.hide() }
     case "enable_power_button":
-      runOnMain { [self] in powerButtonMonitor.start() }
+      runOnMain { powerButtonMonitor.start() }
     case "disable_power_button":
-      runOnMain { [self] in powerButtonMonitor.stop() }
+      runOnMain { powerButtonMonitor.stop() }
     case "start_motion_monitoring":
-      runOnMain { [self] in _ = motionMonitor.start() }
+      runOnMain { _ = motionMonitor.start() }
     case "stop_motion_monitoring":
-      runOnMain { [self] in motionMonitor.stop() }
+      runOnMain { motionMonitor.stop() }
     default:
       send(.error("Unknown command: \(cmd.type)"), to: fileDescriptor)
       return
@@ -232,8 +235,10 @@ final class TCPServer {
     sendStatus(to: fileDescriptor)
   }
 
-  private func runOnMain(_ block: @escaping () -> Void) {
-    CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue, block)
+  private func runOnMain(_ block: @escaping @MainActor () -> Void) {
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) {
+      MainActor.assumeIsolated { block() }
+    }
     CFRunLoopWakeUp(CFRunLoopGetMain())
   }
 

@@ -17,17 +17,18 @@
 
 import Foundation
 
-final class MotionMonitor {
+@MainActor
+final class MotionMonitor: SensorReaderDelegate {
 
   /// Called on the run loop hosting MotionMonitor when a trigger fires.
   /// `detail` is a human-readable diagnostic ("tilt=17°" or "rms=0.18g");
   /// `session` identifies the current monitoring session (incremented on
   /// every successful `start()`) so the main app can drop stale in-flight
   /// events after a stop/start recalibration.
-  var onMotionDetected: ((_ detail: String, _ session: UInt64) -> Void)?
+  var onMotionDetected: (@Sendable (_ detail: String, _ session: UInt64) -> Void)?
 
   /// Current monitoring session number. Starts at 0; `start()` increments.
-  private(set) var currentSession: UInt64 = 0
+  nonisolated(unsafe) private(set) var currentSession: UInt64 = 0
 
   // Tuning defaults — hard-coded; see plan for rationale.
   private static let decimation = 40                 // 800 Hz / 40 = ~20 Hz
@@ -67,13 +68,13 @@ final class MotionMonitor {
 
   // Cooldown state.
   private var lastFireTime: TimeInterval = 0
-  private(set) var isMonitoring = false
+  nonisolated(unsafe) private(set) var isMonitoring = false
 
   /// Optimistic until proven false. On a failed `start()` (device missing,
   /// no root, unsupported hardware) this flips to false and stays false
   /// for the helper's lifetime. Used by the status message so the main app
   /// can hide the Motion toggle on unsupported Macs.
-  private(set) var isHardwareSupported: Bool = true
+  nonisolated(unsafe) private(set) var isHardwareSupported: Bool = true
 
   init(sensorReader: SensorReader = SensorReader()) {
     self.sensorReader = sensorReader
@@ -220,7 +221,7 @@ final class MotionMonitor {
   }
 }
 
-extension MotionMonitor: SensorReaderDelegate {
+extension MotionMonitor {
   func sensorReader(_ reader: SensorReader, didReceiveSample sample: AccelerometerSample) {
     process(sample: sample)
   }

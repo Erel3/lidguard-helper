@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Incoming Commands (App → Daemon)
 
-struct IPCCommand: Codable {
+struct IPCCommand: Codable, Sendable {
   let type: String
   var contactName: String?
   var contactPhone: String?
@@ -11,7 +11,7 @@ struct IPCCommand: Codable {
 
 // MARK: - Outgoing Messages (Daemon → App)
 
-struct IPCMessage: Codable {
+struct IPCMessage: Codable, Sendable {
   let type: String
   var success: Bool?
   var version: String?

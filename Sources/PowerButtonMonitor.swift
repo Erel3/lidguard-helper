@@ -1,12 +1,13 @@
-import ApplicationServices
+@preconcurrency import ApplicationServices
 import Cocoa
 
+@MainActor
 final class PowerButtonMonitor {
-  var onPowerButtonPressed: (() -> Void)?
+  var onPowerButtonPressed: (@Sendable () -> Void)?
 
   private var globalMonitor: Any?
   private var localMonitor: Any?
-  private(set) var isMonitoring = false
+  nonisolated(unsafe) private(set) var isMonitoring = false
 
   func start() {
     guard globalMonitor == nil else { return }

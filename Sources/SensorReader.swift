@@ -29,30 +29,32 @@ struct AccelerometerSample: Sendable {
 
 // swiftlint:enable identifier_name
 
+@MainActor
 protocol SensorReaderDelegate: AnyObject {
   func sensorReader(_ reader: SensorReader, didReceiveSample sample: AccelerometerSample)
   func sensorReader(_ reader: SensorReader, didChangeConnectionState connected: Bool)
 }
 
+@MainActor
 final class SensorReader {
 
   // Apple vendor-defined HID usage page for the SPU sensors.
-  private static let sensorUsagePage: Int = 0xFF00
+  nonisolated static let sensorUsagePage: Int = 0xFF00
   // Usage 3 on that page is the accelerometer.
-  private static let sensorUsage: Int = 3
+  nonisolated static let sensorUsage: Int = 3
   // BMI286 accelerometer reports are 22 bytes: 6-byte header, X/Y/Z as
   // Int32-LE Q16.16 at offsets 6/10/14, 4-byte tail.
-  private static let reportLength: Int = 22
-  private static let xOffset: Int = 6
-  private static let yOffset: Int = 10
-  private static let zOffset: Int = 14
+  nonisolated static let reportLength: Int = 22
+  nonisolated static let xOffset: Int = 6
+  nonisolated static let yOffset: Int = 10
+  nonisolated static let zOffset: Int = 14
   // Q16.16 fixed-point: raw Int32 / 65536 -> g-force.
-  private static let rawToGForce: Double = 65536.0
+  nonisolated static let rawToGForce: Double = 65536.0
   // Buffer size with headroom in case future firmware grows the report.
-  private static let bufferSize: Int = 64
+  nonisolated static let bufferSize: Int = 64
   // Apple's PCI vendor ID; used to disambiguate the accelerometer from
   // other HID devices that share vendor usage page 0xFF00 (keyboard, trackpad).
-  private static let appleVendorID: Int = 0x05AC
+  nonisolated static let appleVendorID: Int = 0x05AC
 
   weak var delegate: SensorReaderDelegate?
 
@@ -77,8 +79,7 @@ final class SensorReader {
     timebaseDenom = Double(info.denom)
   }
 
-  deinit {
-    stop()
+  isolated deinit {
     reportBuffer.deallocate()
   }
 
@@ -237,20 +238,24 @@ final class SensorReader {
     }.first
   }
 
-  fileprivate func handleReport(_ report: UnsafePointer<UInt8>, length: Int) {
-    sampleCount += 1
-    guard length >= 18 else { return }
-
-    let rawX = readInt32LE(report, offset: SensorReader.xOffset)
-    let rawY = readInt32LE(report, offset: SensorReader.yOffset)
-    let rawZ = readInt32LE(report, offset: SensorReader.zOffset)
-    let sample = AccelerometerSample(
+  /// Parse a raw HID report into a Sendable sample without touching
+  /// main-actor-isolated state; called from the C callback before we
+  /// hop to MainActor to deliver it.
+  nonisolated func parseReport(_ report: UnsafePointer<UInt8>, length: Int) -> AccelerometerSample? {
+    guard length >= 18 else { return nil }
+    let rawX = Self.readInt32LE(report, offset: SensorReader.xOffset)
+    let rawY = Self.readInt32LE(report, offset: SensorReader.yOffset)
+    let rawZ = Self.readInt32LE(report, offset: SensorReader.zOffset)
+    return AccelerometerSample(
       x: Double(rawX) / SensorReader.rawToGForce,
       y: Double(rawY) / SensorReader.rawToGForce,
       z: Double(rawZ) / SensorReader.rawToGForce,
       timestamp: currentTimestamp()
     )
+  }
 
+  fileprivate func handleSample(_ sample: AccelerometerSample) {
+    sampleCount += 1
     if sampleCount % 1000 == 0 {
       let now = currentTimestamp()
       let elapsed = now - lastRateCheck
@@ -259,11 +264,10 @@ final class SensorReader {
         lastRateCheck = now
       }
     }
-
     delegate?.sensorReader(self, didReceiveSample: sample)
   }
 
-  private func readInt32LE(_ buffer: UnsafePointer<UInt8>, offset: Int) -> Int32 {
+  nonisolated private static func readInt32LE(_ buffer: UnsafePointer<UInt8>, offset: Int) -> Int32 {
     // swiftlint:disable identifier_name
     let b0 = Int32(buffer[offset])
     let b1 = Int32(buffer[offset + 1]) << 8
@@ -273,7 +277,7 @@ final class SensorReader {
     return b0 | b1 | b2 | b3
   }
 
-  private func currentTimestamp() -> TimeInterval {
+  nonisolated private func currentTimestamp() -> TimeInterval {
     Double(mach_absolute_time()) * timebaseNumer / timebaseDenom / 1_000_000_000.0
   }
 }
@@ -291,5 +295,9 @@ private func hidReportCallback(
 ) {
   guard let context else { return }
   let reader = Unmanaged<SensorReader>.fromOpaque(context).takeUnretainedValue()
-  reader.handleReport(report, length: reportLength)
+  guard let sample = reader.parseReport(report, length: reportLength) else { return }
+  // Scheduled on main runloop via IOHIDManagerScheduleWithRunLoop in start().
+  MainActor.assumeIsolated {
+    reader.handleSample(sample)
+  }
 }
